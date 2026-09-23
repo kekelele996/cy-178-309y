@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LABELS, STATUS_TEXT } from '../config/constants.js';
 import { LetterApi } from '../services/letterApi.js';
+import { formatDateTime, formatRemain } from '../utils/format.js';
 
 const TABS = [
   { key: 'received', label: LABELS.RECEIVED },
@@ -9,39 +10,86 @@ const TABS = [
   { key: 'conversations', label: LABELS.CONVERSATIONS }
 ];
 
-function formatTime(ts) {
-  const d = new Date(ts);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function isScheduled(item) {
+  return item.deliverAt != null;
 }
 
-function LetterCard({ item, onOpen, onToggleFavorite, onSkip }) {
-  const statusClass = item.status === 'skipped' ? 'badge skipped' : 'badge';
+function LetterCard({ item, now, onOpen, onToggleFavorite, onSkip, onCancel, cancellingId }) {
+  const scheduled = isScheduled(item);
+  const waiting = scheduled && item.status === 'pending';
+  const cancelledScheduled = scheduled && item.status === 'cancelled';
+  const locked = waiting || cancelledScheduled;
+  const cancelled = item.status === 'cancelled';
+  const remain = waiting ? item.deliverAt - now : 0;
+
+  const badgeClass = cancelled
+    ? 'badge skipped'
+    : waiting
+      ? 'badge waiting'
+      : 'badge';
+
+  const cardClick = () => {
+    // 未投递（待投/已取消）的定时信件任何人都打不开
+    if (locked) return;
+    onOpen(item.id);
+  };
+
   return (
-    <div className="letter-card" onClick={() => onOpen(item.id)}>
+    <div
+      className={`letter-card ${locked ? 'locked' : ''}`}
+      onClick={cardClick}
+    >
       <div className="letter-meta">
         <span>
           {item.role === 'sent' ? LABELS.SENT_FROM_ME : LABELS.SENT_FROM_STRANGER}
           {item.replyCount > 0 ? ` · ${item.replyCount} 封回信` : ''}
         </span>
         <span>
-          {formatTime(item.createdAt)}
-          {item.status && item.status !== 'delivered' && item.status !== 'pending' && (
+          {formatDateTime(item.createdAt)}
+          {item.status && item.status !== 'delivered' && (
             <>
               {' '}
-              <span className={statusClass}>{STATUS_TEXT[item.status]}</span>
+              <span className={badgeClass}>{STATUS_TEXT[item.status]}</span>
             </>
           )}
         </span>
       </div>
+
+      {waiting && (
+        <div className="schedule-line">
+          <span>
+            {LABELS.DELIVER_AT} {formatDateTime(item.deliverAt)} · {LABELS.REMAINING}{' '}
+            <strong>{formatRemain(remain)}</strong>
+          </span>
+          {remain <= 0 && <span className="countdown-note">正在寻找旅人……</span>}
+          {item.failureReason && (
+            <span className="failure-reason">
+              {LABELS.DELIVERY_FAILED}：{item.failureReason}（{LABELS.RETRY_HINT}）
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="letter-preview">{item.preview}{item.preview.length >= 80 ? '…' : ''}</div>
+
       <div className="letter-actions" onClick={(e) => e.stopPropagation()}>
-        <button
-          className={`icon-btn ${item.favorited ? 'on' : ''}`}
-          onClick={() => onToggleFavorite(item.id)}
-        >
-          {item.favorited ? `★ ${LABELS.UNFAVORITE}` : `☆ ${LABELS.FAVORITE}`}
-        </button>
+        {!locked && (
+          <button
+            className={`icon-btn ${item.favorited ? 'on' : ''}`}
+            onClick={() => onToggleFavorite(item.id)}
+          >
+            {item.favorited ? `★ ${LABELS.UNFAVORITE}` : `☆ ${LABELS.FAVORITE}`}
+          </button>
+        )}
+        {waiting && (
+          <button
+            className="icon-btn danger"
+            onClick={() => onCancel(item.id)}
+            disabled={cancellingId === item.id}
+          >
+            {cancellingId === item.id ? '取消中…' : LABELS.CANCEL_DELIVERY}
+          </button>
+        )}
         {item.role === 'received' && item.status !== 'skipped' && item.replyCount === 0 && (
           <button className="icon-btn" onClick={() => onSkip(item.id)}>
             {LABELS.SKIP}
@@ -57,6 +105,8 @@ export default function InboxPage() {
   const [data, setData] = useState({ sent: [], received: [], conversations: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(Date.now());
+  const [cancellingId, setCancellingId] = useState(null);
   const navigate = useNavigate();
 
   const refresh = async () => {
@@ -71,6 +121,22 @@ export default function InboxPage() {
   };
 
   useEffect(() => { refresh(); }, []);
+
+  // 剩余时间每秒跳动，刷新页面后从服务端 deliverAt 重新计算
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // 有待投信件时周期性拉取，到点/失败/取消后及时更新
+  const hasWaiting = data.sent.some(
+    (l) => l.deliverAt != null && l.status === 'pending'
+  );
+  useEffect(() => {
+    if (!hasWaiting) return;
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, [hasWaiting]);
 
   const toggleFavorite = async (id) => {
     try {
@@ -87,6 +153,21 @@ export default function InboxPage() {
       refresh();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const cancel = async (id) => {
+    if (!window.confirm(LABELS.CANCEL_CONFIRM)) return;
+    setCancellingId(id);
+    setError('');
+    try {
+      await LetterApi.cancel(id);
+      await refresh();
+    } catch (err) {
+      setError(err.message);
+      await refresh();
+    } finally {
+      setCancellingId(null);
     }
   };
 
@@ -121,9 +202,12 @@ export default function InboxPage() {
             <LetterCard
               key={item.id}
               item={item}
+              now={now}
               onOpen={(id) => navigate(`/thread/${id}`)}
               onToggleFavorite={toggleFavorite}
               onSkip={skip}
+              onCancel={cancel}
+              cancellingId={cancellingId}
             />
           ))}
         </div>

@@ -13,12 +13,22 @@ export const ENDPOINTS = {
   LOGIN: `${API_BASE}/api/auth/login`,
   ME: `${API_BASE}/api/auth/me`,
   SEND_LETTER: `${API_BASE}/api/letters`,
+  LETTER_STATUS: (id) => `${API_BASE}/api/letters/${id}/status`,
+  CANCEL_LETTER: (id) => `${API_BASE}/api/letters/${id}/cancel`,
   REPLY_LETTER: (id) => `${API_BASE}/api/letters/${id}/reply`,
   SKIP_LETTER: (id) => `${API_BASE}/api/letters/${id}/skip`,
   FAVORITE_LETTER: (id) => `${API_BASE}/api/letters/${id}/favorite`,
   THREAD: (id) => `${API_BASE}/api/letters/${id}/thread`,
   INBOX: `${API_BASE}/api/inbox`
 };
+
+// 定时投递选项，毫秒值与后端保持一致
+export const SCHEDULE_OPTIONS = [
+  { value: 0, label: '立即送出' },
+  { value: 60 * 1000, label: '1 分钟后' },
+  { value: 60 * 60 * 1000, label: '1 小时后' },
+  { value: 24 * 60 * 60 * 1000, label: '1 天后' }
+];
 
 export const STORAGE_KEYS = {
   TOKEN: 'lp_token',
@@ -56,6 +66,18 @@ export const LABELS = {
   REPLY: '回复',
   SKIP: '跳过',
   SEND: '投入驿站',
+  DELIVERY_TIME: '投递时刻',
+  SCHEDULED_TITLE: '信件已封存',
+  SCHEDULED_HINT: '到点前只有你能看到它，也可以随时取消。',
+  WAITING_SEND: '等待投递',
+  DELIVER_AT: '将于',
+  REMAINING: '剩余',
+  CANCEL_DELIVERY: '取消投递',
+  CANCEL_CONFIRM: '确定取消这封信的投递吗？取消后无法恢复。',
+  DELIVERY_FAILED: '投递暂未成功',
+  DELIVERY_DONE: '已随机投给一位旅人',
+  DELIVERY_CANCELLED: '投递已取消',
+  RETRY_HINT: '驿站会继续尝试投递',
   CONTENT_PLACEHOLDER: '写下此刻想对陌生人说的话……',
   EMPTY_SENT: '还没有寄出的信',
   EMPTY_RECEIVED: '信箱空空，等一封信',
@@ -71,5 +93,6 @@ export const STATUS_TEXT = {
   pending: '待处理',
   delivered: '已送达',
   skipped: '已跳过',
-  replied: '已回复'
+  replied: '已回复',
+  cancelled: '已取消'
 };

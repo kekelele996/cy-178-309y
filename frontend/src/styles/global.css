@@ -494,6 +494,110 @@ input, textarea {
   border-color: var(--line);
 }
 
+.badge.waiting {
+  background: #eef4e8;
+  color: #5b7a43;
+  border-color: #bccfa6;
+}
+
+.letter-card.locked {
+  cursor: default;
+  border-style: dashed;
+  background: #fbf6ea;
+}
+
+.letter-card.locked:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.schedule-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: center;
+  font-size: 13px;
+  color: #5b7a43;
+  background: #eef4e8;
+  border: 1px solid #d5e2c6;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.countdown-note {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.failure-reason {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.icon-btn.danger,
+.secondary-btn.danger {
+  color: var(--accent);
+  border-color: var(--accent-soft);
+}
+
+.schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0 4px;
+  flex-wrap: wrap;
+}
+
+.schedule-label {
+  font-size: 13px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.schedule-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.schedule-chip {
+  background: #fffdf6;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 16px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.schedule-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.schedule-status {
+  text-align: center;
+}
+
+.countdown-card {
+  background: #fffdf6;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 18px;
+  margin: 8px auto 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 420px;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.countdown-remain strong {
+  color: var(--accent);
+  font-size: 18px;
+}
+
 .loading {
   text-align: center;
   color: var(--muted);

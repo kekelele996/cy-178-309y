@@ -4,7 +4,23 @@ const FavoriteModel = require('../models/favoriteModel');
 const { LETTER_STATUS, MESSAGES } = require('../config/constants');
 
 const LetterService = {
-  sendRandom({ senderId, content }) {
+  sendRandom({ senderId, content, delayMs }) {
+    const now = Date.now();
+
+    if (delayMs) {
+      // 定时信件：此刻不挑选收件人，任何人都接触不到，只挂在寄件人“发出的”里
+      const id = LetterModel.create({
+        senderId,
+        receiverId: null,
+        parentId: null,
+        content,
+        status: LETTER_STATUS.PENDING,
+        deliverAt: now + delayMs,
+        createdAt: now
+      });
+      return { letter: LetterModel.findById(id), scheduled: true };
+    }
+
     const other = UserModel.findRandomOther(senderId);
     if (!other) {
       const err = new Error(MESSAGES.NO_OTHER_USERS);
@@ -17,9 +33,61 @@ const LetterService = {
       parentId: null,
       content,
       status: LETTER_STATUS.DELIVERED,
-      createdAt: Date.now()
+      createdAt: now
     });
-    return LetterModel.findById(id);
+    return { letter: LetterModel.findById(id), scheduled: false };
+  },
+
+  cancel({ userId, letterId }) {
+    const letter = LetterModel.findById(letterId);
+    if (!letter || letter.sender_id !== userId) {
+      const err = new Error(MESSAGES.LETTER_NOT_FOUND);
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+    if (!letter.deliver_at) {
+      const err = new Error(MESSAGES.NOT_SCHEDULED);
+      err.code = 'CONFLICT';
+      throw err;
+    }
+    // 条件更新保证：取消与到点投递并发时只能有一方成功
+    const cancelled = LetterModel.cancelPending({ id: letterId, senderId: userId });
+    if (!cancelled) {
+      const err = new Error(MESSAGES.CANCEL_CONFLICT);
+      err.code = 'CONFLICT';
+      throw err;
+    }
+    return true;
+  },
+
+  // 扫描并投递单封到期信件；返回结果便于测试与日志
+  processDueLetter(letter, now = Date.now()) {
+    if (letter.status !== LETTER_STATUS.PENDING || !letter.deliver_at) {
+      return { id: letter.id, outcome: 'skip' };
+    }
+    if (letter.deliver_at > now) {
+      return { id: letter.id, outcome: 'waiting' };
+    }
+
+    const other = UserModel.findRandomOther(letter.sender_id);
+    if (!other) {
+      // 投递失败：保留待投状态和原因，等下一轮扫描重试
+      LetterModel.markFailure(letter.id, MESSAGES.NO_OTHER_USERS);
+      return { id: letter.id, outcome: 'failed', reason: MESSAGES.NO_OTHER_USERS };
+    }
+
+    // 原子抢占：重复扫描或并发取消都只能有一个结果
+    const won = LetterModel.markDelivered({ id: letter.id, receiverId: other.id });
+    if (!won) {
+      return { id: letter.id, outcome: 'lost' };
+    }
+    return { id: letter.id, outcome: 'delivered', receiverId: other.id };
+  },
+
+  scanDue(now = Date.now()) {
+    return LetterModel.listDue(now).map((letter) =>
+      LetterService.processDueLetter(letter, now)
+    );
   },
 
   reply({ userId, parentId, content }) {
@@ -36,9 +104,22 @@ const LetterService = {
       err.code = 'FORBIDDEN';
       throw err;
     }
-    const receiverId = isReceiver ? parent.sender_id : parent.receiver_id;
 
     const rootId = LetterModel.findRootByChild(parent.id);
+    const root = LetterModel.findById(rootId);
+    // 定时信件在真正投递前（待投或已取消）不允许形成回复
+    if (
+      root &&
+      root.deliver_at &&
+      (root.status === LETTER_STATUS.PENDING || root.status === LETTER_STATUS.CANCELLED)
+    ) {
+      const err = new Error(MESSAGES.LETTER_NOT_DELIVERED);
+      err.code = 'CONFLICT';
+      throw err;
+    }
+
+    const receiverId = isReceiver ? parent.sender_id : parent.receiver_id;
+
     const id = LetterModel.create({
       senderId: userId,
       receiverId,
@@ -70,6 +151,22 @@ const LetterService = {
   },
 
   toggleFavorite({ userId, letterId }) {
+    const letter = LetterModel.findById(letterId);
+    if (!letter) {
+      const err = new Error(MESSAGES.LETTER_NOT_FOUND);
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+    // 定时信件在真正投递前（待投或已取消），任何人都不能收藏
+    const participant = letter.sender_id === userId || letter.receiver_id === userId;
+    const scheduledButNotDelivered =
+      letter.deliver_at &&
+      (letter.status === LETTER_STATUS.PENDING || letter.status === LETTER_STATUS.CANCELLED);
+    if (!participant || scheduledButNotDelivered) {
+      const err = new Error(MESSAGES.NOT_YOUR_LETTER);
+      err.code = 'FORBIDDEN';
+      throw err;
+    }
     const exists = FavoriteModel.exists({ userId, letterId });
     if (exists) {
       FavoriteModel.remove({ userId, letterId });
@@ -96,6 +193,8 @@ const LetterService = {
         preview: l.content.slice(0, 80),
         status: l.status,
         createdAt: l.created_at,
+        deliverAt: l.deliver_at,
+        failureReason: l.failure_reason,
         replyCount: l.reply_count,
         role,
         favorited: favorites.has(l.id)
@@ -104,6 +203,22 @@ const LetterService = {
       sent: decorate(rawSent, 'sent'),
       received: decorate(rawReceived, 'received'),
       conversations: decorate(rawConvos, 'either')
+    };
+  },
+
+  getLetterStatus({ userId, letterId }) {
+    const letter = LetterModel.findById(letterId);
+    if (!letter || letter.sender_id !== userId) {
+      const err = new Error(MESSAGES.LETTER_NOT_FOUND);
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+    return {
+      id: letter.id,
+      status: letter.status,
+      createdAt: letter.created_at,
+      deliverAt: letter.deliver_at,
+      failureReason: letter.failure_reason
     };
   },
 
@@ -118,6 +233,15 @@ const LetterService = {
     if (first.sender_id !== userId && first.receiver_id !== userId) {
       const err = new Error(MESSAGES.NOT_YOUR_LETTER);
       err.code = 'FORBIDDEN';
+      throw err;
+    }
+    // 定时信件在真正投递前（待投或已取消）不允许打开对话
+    if (
+      first.deliver_at &&
+      (first.status === LETTER_STATUS.PENDING || first.status === LETTER_STATUS.CANCELLED)
+    ) {
+      const err = new Error(MESSAGES.LETTER_NOT_DELIVERED);
+      err.code = 'CONFLICT';
       throw err;
     }
     const me = userId;

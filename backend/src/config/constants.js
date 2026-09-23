@@ -25,8 +25,25 @@ module.exports = {
     PENDING: 'pending',
     DELIVERED: 'delivered',
     SKIPPED: 'skipped',
-    REPLIED: 'replied'
+    REPLIED: 'replied',
+    CANCELLED: 'cancelled'
   },
+
+  // 定时投递可选择的延迟（毫秒）
+  SCHEDULE_DELAYS: {
+    MINUTE: 60 * 1000,
+    HOUR: 60 * 60 * 1000,
+    DAY: 24 * 60 * 60 * 1000
+  },
+
+  // 白名单额外允许的延迟（逗号分隔毫秒），仅用于测试，默认不放开
+  SCHEDULE_EXTRA_DELAYS: (process.env.SCHEDULE_EXTRA_DELAYS || '')
+    .split(',')
+    .map((v) => Number(v.trim()))
+    .filter((v) => Number.isFinite(v) && v > 0),
+
+  // 后台扫描到期待投信件的间隔（毫秒）
+  SCHEDULER_INTERVAL_MS: Number(process.env.SCHEDULER_INTERVAL_MS) || 5000,
 
   ROLES: {
     SENDER: 'sender',
@@ -51,6 +68,12 @@ module.exports = {
     FAVORITED: '已收藏',
     UNFAVORITED: '已取消收藏',
     SKIPPED: '已跳过这封信',
-    REPLIED: '回复已送达'
+    REPLIED: '回复已送达',
+    LETTER_SCHEDULED: '信件已登记，将在约定时刻送出',
+    INVALID_DELAY: '只能选择 1 分钟、1 小时或 1 天后投递',
+    LETTER_CANCELLED: '已取消投递',
+    CANCEL_CONFLICT: '信件已投出或已取消，操作未生效',
+    NOT_SCHEDULED: '这封信不在待投状态',
+    LETTER_NOT_DELIVERED: '信件尚未投递'
   }
 };
