@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LABELS, ROUTES } from '../config/constants.js';
+import { LABELS, ROUTES, DELIVERY_OPTIONS } from '../config/constants.js';
 import { LetterApi } from '../services/letterApi.js';
 
 export default function ComposePage() {
   const [content, setContent] = useState('');
+  const [delayMs, setDelayMs] = useState(0);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(null);
   const navigate = useNavigate();
 
   const submit = async () => {
@@ -15,8 +16,8 @@ export default function ComposePage() {
     if (!content.trim()) return;
     setSending(true);
     try {
-      await LetterApi.send({ content: content.trim() });
-      setDone(true);
+      const result = await LetterApi.send({ content: content.trim(), delayMs });
+      setDone(result);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -25,12 +26,27 @@ export default function ComposePage() {
   };
 
   if (done) {
+    const scheduled = done.scheduled;
     return (
       <div className="compose-wrap" style={{ textAlign: 'center' }}>
-        <h2 className="compose-title">信已投入驿站</h2>
-        <p className="compose-hint">它正在寻找一位陌生的旅人……</p>
+        <h2 className="compose-title">
+          {scheduled ? '信已封存在驿站' : '信已投入驿站'}
+        </h2>
+        <p className="compose-hint">
+          {scheduled
+            ? LABELS.SCHEDULED_HINT
+            : '它正在寻找一位陌生的旅人……'}
+        </p>
         <div className="home-actions">
-          <button className="secondary-btn" onClick={() => { setDone(false); setContent(''); }}>
+          {scheduled && (
+            <button
+              className="big-btn"
+              onClick={() => navigate(`/pending/${done.id}`)}
+            >
+              查看投递状态
+            </button>
+          )}
+          <button className="secondary-btn" onClick={() => { setDone(null); setContent(''); setDelayMs(0); }}>
             再写一封
           </button>
           <button className="secondary-btn" onClick={() => navigate(ROUTES.INBOX)}>
@@ -54,6 +70,19 @@ export default function ComposePage() {
         placeholder={LABELS.CONTENT_PLACEHOLDER}
         maxLength={2000}
       />
+      <div className="delivery-options">
+        <span className="delivery-label">{LABELS.SEND_WHEN}</span>
+        {DELIVERY_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            className={`delivery-chip ${delayMs === opt.value ? 'active' : ''}`}
+            onClick={() => setDelayMs(opt.value)}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
       <div className="compose-footer">
         <span className="count">{content.length} / 2000</span>
         <div>

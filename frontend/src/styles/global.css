@@ -494,6 +494,103 @@ input, textarea {
   border-color: var(--line);
 }
 
+.badge.scheduled {
+  background: #fdf4d8;
+  color: #9a7a1f;
+  border-color: #e3cd8a;
+}
+
+.delivery-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+.delivery-label {
+  color: var(--ink-soft);
+  font-size: 13px;
+  margin-right: 4px;
+}
+
+.delivery-chip {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.delivery-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.letter-card.locked {
+  cursor: default;
+  background: #fdfaf0;
+  border-style: dashed;
+}
+
+.letter-card.locked:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.letter-schedule {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pending-countdown {
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pending-fail {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.icon-btn.danger {
+  color: var(--accent);
+  border-color: var(--accent-soft);
+}
+
+.icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pending-wrap {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.pending-status-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 10px 0;
+}
+
+.pending-content {
+  background: #fffdf6;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  max-height: 280px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
 .loading {
   text-align: center;
   color: var(--muted);

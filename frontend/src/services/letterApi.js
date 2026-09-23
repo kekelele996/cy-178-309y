@@ -2,11 +2,17 @@ import { api } from './http.js';
 import { ENDPOINTS } from '../config/constants.js';
 
 export const LetterApi = {
-  send({ content }) {
+  send({ content, delayMs }) {
     return api.request(ENDPOINTS.SEND_LETTER, {
       method: 'POST',
-      body: JSON.stringify({ content })
+      body: JSON.stringify({ content, delayMs })
     });
+  },
+  get(id) {
+    return api.request(ENDPOINTS.LETTER(id));
+  },
+  cancel(id) {
+    return api.request(ENDPOINTS.CANCEL_LETTER(id), { method: 'POST' });
   },
   reply({ id, content }) {
     return api.request(ENDPOINTS.REPLY_LETTER(id), {

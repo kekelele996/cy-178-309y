@@ -6,6 +6,7 @@ import AuthPage from './pages/AuthPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import ComposePage from './pages/ComposePage.jsx';
 import InboxPage from './pages/InboxPage.jsx';
+import PendingPage from './pages/PendingPage.jsx';
 import ThreadPage from './pages/ThreadPage.jsx';
 import './styles/global.css';
 
@@ -88,6 +89,14 @@ export default function App() {
         element={
           <RequireAuth>
             <InboxPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path={ROUTES.PENDING}
+        element={
+          <RequireAuth>
+            <PendingPage />
           </RequireAuth>
         }
       />

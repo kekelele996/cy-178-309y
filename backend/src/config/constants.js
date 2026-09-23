@@ -25,7 +25,15 @@ module.exports = {
     PENDING: 'pending',
     DELIVERED: 'delivered',
     SKIPPED: 'skipped',
-    REPLIED: 'replied'
+    REPLIED: 'replied',
+    SCHEDULED: 'scheduled',
+    CANCELLED: 'cancelled',
+    DELIVERING: 'delivering'
+  },
+
+  DELIVERY: {
+    DELAYS: [0, 60 * 1000, 60 * 60 * 1000, 24 * 60 * 60 * 1000],
+    SCAN_INTERVAL_MS: 5 * 1000
   },
 
   ROLES: {
@@ -48,6 +56,12 @@ module.exports = {
     LETTER_NOT_FOUND: '信件不存在',
     NOT_YOUR_LETTER: '这不是你的信件',
     LETTER_SENT: '信件已投入驿站',
+    LETTER_SCHEDULED: '信件已登记，将在约定时刻送出',
+    LETTER_CANCELLED: '已取消投递',
+    LETTER_ALREADY_HANDLED: '信件已投出或已取消',
+    LETTER_NOT_SCHEDULED: '这封信不在待投列表里',
+    LETTER_NOT_DUE: '还没到投递时刻',
+    LETTER_LOCKED: '信件正在投递中',
     FAVORITED: '已收藏',
     UNFAVORITED: '已取消收藏',
     SKIPPED: '已跳过这封信',

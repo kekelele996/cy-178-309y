@@ -1,12 +1,21 @@
 const db = require('../data/database');
 
 const LetterModel = {
-  create({ senderId, receiverId, parentId, content, status, createdAt }) {
+  create({ senderId, receiverId, parentId, content, status, createdAt, deliverAt }) {
     const stmt = db.prepare(
-      `INSERT INTO letters (sender_id, receiver_id, parent_id, content, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO letters
+         (sender_id, receiver_id, parent_id, content, status, created_at, deliver_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
     );
-    const info = stmt.run(senderId, receiverId, parentId || null, content, status, createdAt);
+    const info = stmt.run(
+      senderId,
+      receiverId == null ? null : receiverId,
+      parentId || null,
+      content,
+      status,
+      createdAt,
+      deliverAt || null
+    );
     return info.lastInsertRowid;
   },
 
@@ -33,6 +42,69 @@ const LetterModel = {
     return db.prepare('UPDATE letters SET status = ? WHERE id = ?').run(status, id);
   },
 
+  // Scheduled letters that have reached their delivery time.
+  listDueScheduled(now, limit = 50) {
+    return db
+      .prepare(
+        `SELECT * FROM letters
+         WHERE status = 'scheduled' AND deliver_at IS NOT NULL AND deliver_at <= ?
+         ORDER BY deliver_at ASC
+         LIMIT ?`
+      )
+      .all(now, limit);
+  },
+
+  // Atomic cancel: wins only if the letter is still scheduled and owned by
+  // the sender. Returns 1 when the cancellation wins, 0 when delivery (or a
+  // previous cancel) has already claimed the row.
+  cancelIfScheduled(id, senderId) {
+    const info = db
+      .prepare(
+        `UPDATE letters
+         SET status = 'cancelled'
+         WHERE id = ? AND sender_id = ? AND status = 'scheduled'`
+      )
+      .run(id, senderId);
+    return info.changes;
+  },
+
+  // Atomic claim of a due letter. Re-checking status + deliver_at inside the
+  // UPDATE makes repeated scans a no-op and races the cancel endpoint: only
+  // one of the two can ever change the row.
+  claimForDelivery(id, now) {
+    const info = db
+      .prepare(
+        `UPDATE letters
+         SET status = 'delivering'
+         WHERE id = ? AND status = 'scheduled' AND deliver_at <= ?`
+      )
+      .run(id, now);
+    return info.changes;
+  },
+
+  // Complete delivery: bind a receiver and mark delivered.
+  markDelivered(id, receiverId, deliveredAt) {
+    return db
+      .prepare(
+        `UPDATE letters
+         SET status = 'delivered', receiver_id = ?, delivered_at = ?, fail_reason = NULL
+         WHERE id = ? AND status = 'delivering'`
+      )
+      .run(receiverId, deliveredAt, id);
+  },
+
+  // Delivery failed (e.g. no other travellers yet): keep it pending for the
+  // next scan and remember why.
+  markDeliveryFailed(id, reason) {
+    return db
+      .prepare(
+        `UPDATE letters
+         SET status = 'scheduled', fail_reason = ?
+         WHERE id = ? AND status = 'delivering'`
+      )
+      .run(reason, id);
+  },
+
   listSentByUser(userId) {
     return db
       .prepare(
@@ -51,7 +123,9 @@ const LetterModel = {
         `SELECT l.*,
           (SELECT COUNT(*) FROM letters c WHERE c.parent_id = l.id) AS reply_count
          FROM letters l
-         WHERE l.receiver_id = ? AND l.parent_id IS NULL
+         WHERE l.receiver_id = ?
+           AND l.parent_id IS NULL
+           AND l.status NOT IN ('scheduled', 'cancelled')
          ORDER BY l.created_at DESC`
       )
       .all(userId);
@@ -64,6 +138,7 @@ const LetterModel = {
           (SELECT COUNT(*) FROM letters c WHERE c.parent_id = l.id) AS reply_count
          FROM letters l
          WHERE l.parent_id IS NULL
+           AND l.status NOT IN ('scheduled', 'cancelled')
            AND (l.sender_id = ? OR l.receiver_id = ?)
            AND EXISTS (
              SELECT 1 FROM letters c WHERE c.parent_id = l.id
